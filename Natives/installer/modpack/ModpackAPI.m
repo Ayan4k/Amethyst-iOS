@@ -44,7 +44,7 @@
     AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
     if (post) manager.requestSerializer = [AFJSONRequestSerializer serializer];
     manager.requestSerializer.timeoutInterval = 30;
-    if ([self.baseURL containsString:@"api.modrinth.com"]) {
+    if ([self.baseURL containsString:@"api.modrinth.com"] || [self.baseURL containsString:@"mod.mcimirror.top"]) {
         [manager.requestSerializer setValue:@"AngelAuraAmethyst/1.0 (https://github.com/AngelAuraMC/Amethyst-iOS)" forHTTPHeaderField:@"User-Agent"];
     }
     void (^success)(NSURLSessionDataTask *, id) = ^(NSURLSessionDataTask *task, id obj) {
