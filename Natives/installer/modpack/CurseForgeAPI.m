@@ -78,7 +78,7 @@ static NSNumber *CFLoader(NSDictionary *filters) {
 
 - (NSDictionary *)requestHeaders {
     NSString *key = CFKey();
-    return key.length ? @{@ "x-api-key": key} : @{};
+    return key.length ? @{@"x-api-key": key} : @{};
 }
 
 - (BOOL)checkConfiguration {
