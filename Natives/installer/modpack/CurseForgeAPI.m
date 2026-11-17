@@ -8,6 +8,20 @@ static NSString *CFIdentifier(id value) { return [value isKindOfClass:NSNumber.c
 static NSString *CFKey(void) {
     return [CurseForgeAPI apiKey];
 }
+
+// MCIM exposes a keyless CurseForge-compatible API and file proxy.
+// Keep the original path, query, and fragment while changing only the host.
+static NSString *CFMirrorDownloadURL(NSString *value) {
+    if (![value isKindOfClass:NSString.class] || value.length == 0) return value ?: @"";
+    NSURLComponents *components = [NSURLComponents componentsWithString:value];
+    NSString *host = components.host.lowercaseString;
+    NSSet *cdnHosts = [NSSet setWithArray:@[@"edge.forgecdn.net", @"mediafilez.forgecdn.net", @"media.forgecdn.net"]];
+    if ([cdnHosts containsObject:host]) {
+        components.host = @"mod.mcimirror.top";
+        return components.URL.absoluteString ?: value;
+    }
+    return value;
+}
 static NSNumber *CFLoader(NSDictionary *filters) {
     if (![[ModrinthSearchFilters contentTypeForFilters:filters] isEqual:@"mod"]) return nil;
     return @{@"forge": @1, @"liteloader": @3, @"fabric": @4, @"quilt": @5, @"neoforge": @6}[filters[@"loader"] ?: @""];
@@ -50,13 +64,25 @@ static NSNumber *CFLoader(NSDictionary *filters) {
     [NSNotificationCenter.defaultCenter postNotificationName:@"CurseForgeConfigurationDidChange" object:nil];
     return YES;
 }
-- (instancetype)init { return [super initWithURL:@"https://api.curseforge.com/v1"]; }
-+ (BOOL)isConfigured { return CFKey().length > 0; }
-- (NSDictionary *)requestHeaders { return self.class.isConfigured ? @{@"x-api-key": CFKey()} : @{}; }
+- (instancetype)init {
+    // Prefer the keyless MCIM endpoint when the user has not supplied an official key.
+    NSString *baseURL = CFKey().length
+        ? @"https://api.curseforge.com/v1"
+        : @"https://mod.mcimirror.top/curseforge/v1";
+    return [super initWithURL:baseURL];
+}
+
+// CurseForge is available even without a user-supplied API key: the default
+// transport is the MCIM compatibility mirror.
++ (BOOL)isConfigured { return YES; }
+
+- (NSDictionary *)requestHeaders {
+    NSString *key = CFKey();
+    return key.length ? @{@"x-api-key": key} : @{};
+}
+
 - (BOOL)checkConfiguration {
-    if (self.class.isConfigured) return YES;
-    self.lastError = [NSError errorWithDomain:@"CurseForge" code:100 userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"content.curseforge.unconfigured", nil)}];
-    return NO;
+    return YES;
 }
 - (id)getEndpoint:(NSString *)endpoint params:(NSDictionary *)params {
     return [self checkConfiguration] ? [super getEndpoint:endpoint params:params] : nil;
@@ -145,7 +171,7 @@ static NSNumber *CFLoader(NSDictionary *filters) {
         if ([@[@"forge", @"fabric", @"quilt", @"neoforge", @"liteloader"] containsObject:[game lowercaseString]]) [loaders addObject:[game lowercaseString]];
         else [versions addObject:game];
     }
-    NSDictionary *download = @{@"filename": CFString(file[@"fileName"]), @"url": CFString(file[@"downloadUrl"]), @"size": [file[@"fileLength"] isKindOfClass:NSNumber.class] ? file[@"fileLength"] : @0, @"hashes": @{@"sha1": sha1}, @"primary": @YES};
+    NSDictionary *download = @{@"filename": CFString(file[@"fileName"]), @"url": CFMirrorDownloadURL(CFString(file[@"downloadUrl"])), @"size": [file[@"fileLength"] isKindOfClass:NSNumber.class] ? file[@"fileLength"] : @0, @"hashes": @{@"sha1": sha1}, @"primary": @YES};
     BOOL available = [file[@"isAvailable"] boolValue] && ![file[@"isServerPack"] boolValue] && ![file[@"isEarlyAccessContent"] boolValue] && CFString(file[@"downloadUrl"]).length;
     NSMutableArray *dependencies = [NSMutableArray new];
     for (id dep in [file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[]) {
